@@ -1,15 +1,12 @@
-// 抖音续火花核心逻辑模块
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-
 const ROOT = path.join(__dirname);
 const DATA_DIR = process.pkg ? path.dirname(process.execPath) : ROOT;
 const PROFILE_DIR = path.join(DATA_DIR, '.browser-profile');
 const FRIENDS_CACHE = path.join(DATA_DIR, 'friends.json');
 const CHAT_URL = 'https://www.douyin.com/chat';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 class SparkCore {
   constructor(options = {}) { this.show = options.show || false; this.context = null; this.page = null; this.onLog = options.onLog || ((msg) => console.log(msg)); }
   log(msg) { this.onLog(`[${new Date().toLocaleString('zh-CN', { hour12: false })}] ${msg}`); }
@@ -42,7 +39,9 @@ class SparkCore {
   }
   async fetchAllFriends() {
     this.log('正在加载好友列表...');
-    await this.ensureLoggedIn(); await sleep(6000);
+    const loggedIn = await this.ensureLoggedIn(true);
+    if (!loggedIn) { this.log('登录超时或未登录'); return []; }
+    await sleep(6000);
     const allFriends = new Map(); let noChangeTimes = 0;
     for (let round = 0; round < 100; round++) {
       const convs = await this.readVisibleConversations();
