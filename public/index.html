@@ -68,7 +68,45 @@
           <button id="runBtn" class="btn btn-success btn-block">立即运行一次</button>
           <button id="stopBtn" class="btn btn-danger btn-block" style="display:none;">停止运行</button>
         </div>
-        <p class="hint">定时任务每天 22:30 自动按当前设置运行</p>
+        <p class="hint">定时任务每天自动按当前设置运行</p>
+      </div>
+
+      <div class="config-section">
+        <h3>定时任务</h3>
+        <div id="scheduleEmpty" class="schedule-empty">
+          <p>尚未设置定时任务</p>
+          <div class="schedule-create">
+            <input type="time" id="newScheduleTime" class="form-input" value="22:30">
+            <button id="createScheduleBtn" class="btn btn-primary btn-block">创建定时任务</button>
+          </div>
+        </div>
+        <div id="scheduleInfo" style="display:none;">
+          <div class="schedule-status">
+            <div class="schedule-status-row">
+              <span class="schedule-label">状态</span>
+              <span id="scheduleState" class="schedule-state schedule-state-on">已启用</span>
+            </div>
+            <div class="schedule-status-row">
+              <span class="schedule-label">每天</span>
+              <span id="scheduleTime" class="schedule-value">22:30</span>
+            </div>
+            <div class="schedule-status-row">
+              <span class="schedule-label">下次运行</span>
+              <span id="scheduleNext" class="schedule-value">-</span>
+            </div>
+          </div>
+          <div class="schedule-edit">
+            <label for="editScheduleTime">修改时间</label>
+            <div class="schedule-edit-row">
+              <input type="time" id="editScheduleTime" class="form-input">
+              <button id="saveScheduleBtn" class="btn btn-primary btn-sm">保存</button>
+            </div>
+          </div>
+          <div class="schedule-actions">
+            <button id="toggleScheduleBtn" class="btn btn-sm">禁用</button>
+            <button id="deleteScheduleBtn" class="btn btn-sm btn-danger">删除</button>
+          </div>
+        </div>
       </div>
 
       <div class="config-section log-section">

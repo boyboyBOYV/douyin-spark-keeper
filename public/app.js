@@ -23,10 +23,20 @@ const overlayText = $('overlayText');
 const runBtn = $('runBtn');
 const stopBtn = $('stopBtn');
 
+// 定时任务 DOM
+const scheduleEmpty = $('scheduleEmpty');
+const scheduleInfo = $('scheduleInfo');
+const scheduleState = $('scheduleState');
+const scheduleTime = $('scheduleTime');
+const scheduleNext = $('scheduleNext');
+const newScheduleTime = $('newScheduleTime');
+const editScheduleTime = $('editScheduleTime');
+
 // 初始化
 async function init() {
   await loadConfig();
   await loadFriends();
+  await loadSchedule();
   bindEvents();
   updateUI();
 }
@@ -163,6 +173,18 @@ function bindEvents() {
   $('clearLogBtn').addEventListener('click', () => {
     logBox.innerHTML = '<div class="log-empty">暂无日志</div>';
   });
+
+  // 定时任务 - 创建
+  $('createScheduleBtn').addEventListener('click', createSchedule);
+
+  // 定时任务 - 保存修改
+  $('saveScheduleBtn').addEventListener('click', saveSchedule);
+
+  // 定时任务 - 启用/禁用
+  $('toggleScheduleBtn').addEventListener('click', toggleSchedule);
+
+  // 定时任务 - 删除
+  $('deleteScheduleBtn').addEventListener('click', deleteSchedule);
 }
 
 // 刷新好友列表
@@ -325,6 +347,128 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ========== 定时任务管理 ==========
+
+// 加载定时任务状态
+async function loadSchedule() {
+  try {
+    const res = await fetch(`${API}/api/schedule`);
+    const data = await res.json();
+    renderSchedule(data);
+  } catch (e) {
+    console.error('加载定时任务失败', e);
+  }
+}
+
+// 渲染定时任务状态
+function renderSchedule(data) {
+  if (!data.exists) {
+    scheduleEmpty.style.display = 'block';
+    scheduleInfo.style.display = 'none';
+    return;
+  }
+
+  scheduleEmpty.style.display = 'none';
+  scheduleInfo.style.display = 'block';
+
+  scheduleTime.textContent = data.time || '-';
+  editScheduleTime.value = data.time || '22:30';
+  scheduleNext.textContent = data.nextRun || '-';
+
+  if (data.enabled) {
+    scheduleState.textContent = '已启用';
+    scheduleState.className = 'schedule-state schedule-state-on';
+    $('toggleScheduleBtn').textContent = '禁用';
+  } else {
+    scheduleState.textContent = '已禁用';
+    scheduleState.className = 'schedule-state schedule-state-off';
+    $('toggleScheduleBtn').textContent = '启用';
+  }
+}
+
+// 创建定时任务
+async function createSchedule() {
+  const time = newScheduleTime.value;
+  if (!time) {
+    alert('请选择运行时间');
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/api/schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ time }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      renderSchedule(data);
+      addLog('success', `定时任务已创建：每天 ${time} 自动运行`);
+    } else {
+      const err = await res.json();
+      alert(`创建失败：${err.error || '未知错误'}`);
+    }
+  } catch (e) {
+    alert(`创建失败：${e.message}`);
+  }
+}
+
+// 保存定时任务修改
+async function saveSchedule() {
+  const time = editScheduleTime.value;
+  if (!time) {
+    alert('请选择运行时间');
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/api/schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ time }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      renderSchedule(data);
+      addLog('success', `定时任务已更新：每天 ${time} 自动运行`);
+    } else {
+      const err = await res.json();
+      alert(`保存失败：${err.error || '未知错误'}`);
+    }
+  } catch (e) {
+    alert(`保存失败：${e.message}`);
+  }
+}
+
+// 启用/禁用定时任务
+async function toggleSchedule() {
+  const isEnabled = scheduleState.textContent === '已启用';
+  const endpoint = isEnabled ? '/api/schedule/disable' : '/api/schedule/enable';
+  try {
+    const res = await fetch(`${API}${endpoint}`, { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      renderSchedule(data.schedule);
+      addLog('info', `定时任务已${isEnabled ? '禁用' : '启用'}`);
+    }
+  } catch (e) {
+    alert(`操作失败：${e.message}`);
+  }
+}
+
+// 删除定时任务
+async function deleteSchedule() {
+  if (!confirm('确定要删除定时任务吗？删除后将不会自动运行。')) return;
+  try {
+    const res = await fetch(`${API}/api/schedule`, { method: 'DELETE' });
+    if (res.ok) {
+      scheduleEmpty.style.display = 'block';
+      scheduleInfo.style.display = 'none';
+      addLog('info', '定时任务已删除');
+    }
+  } catch (e) {
+    alert(`删除失败：${e.message}`);
+  }
 }
 
 // 启动
