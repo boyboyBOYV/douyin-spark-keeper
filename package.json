@@ -1,0 +1,17 @@
+{
+  "name": "douyin-spark-keeper",
+  "version": "1.0.0",
+  "description": "每天自动给抖音好友发消息续火花的 Windows 自动化工具",
+  "main": "send-spark.js",
+  "scripts": {
+    "start": "node send-spark.js",
+    "show": "node send-spark.js --show",
+    "login": "node send-spark.js --login"
+  },
+  "keywords": ["douyin", "spark", "automation", "playwright"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}
