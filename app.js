@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const SparkCore = require('./spark-core');
+const schedule = require('./schedule');
 
 const PORT = 37890;
 const ROOT = __dirname;
@@ -246,6 +247,61 @@ async function handleAPI(req, res) {
     if (pathname === '/api/logs' && req.method === 'GET') {
       res.writeHead(200);
       res.end(JSON.stringify(state.logs));
+      return;
+    }
+
+    // GET /api/schedule - 获取定时任务状态
+    if (pathname === '/api/schedule' && req.method === 'GET') {
+      res.writeHead(200);
+      res.end(JSON.stringify(schedule.getSchedule()));
+      return;
+    }
+
+    // POST /api/schedule - 创建或更新定时任务
+    if (pathname === '/api/schedule' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const time = body.time;
+      if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: '时间格式不正确，应为 HH:MM' }));
+        return;
+      }
+      try {
+        const result = schedule.setSchedule(time);
+        if (body.enabled === false) {
+          schedule.disableSchedule();
+          result.enabled = false;
+        }
+        res.writeHead(200);
+        res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // DELETE /api/schedule - 删除定时任务
+    if (pathname === '/api/schedule' && req.method === 'DELETE') {
+      const ok = schedule.deleteSchedule();
+      res.writeHead(ok ? 200 : 500);
+      res.end(JSON.stringify({ success: ok }));
+      return;
+    }
+
+    // POST /api/schedule/enable - 启用定时任务
+    if (pathname === '/api/schedule/enable' && req.method === 'POST') {
+      const ok = schedule.enableSchedule();
+      res.writeHead(ok ? 200 : 500);
+      res.end(JSON.stringify({ success: ok, schedule: schedule.getSchedule() }));
+      return;
+    }
+
+    // POST /api/schedule/disable - 禁用定时任务
+    if (pathname === '/api/schedule/disable' && req.method === 'POST') {
+      const ok = schedule.disableSchedule();
+      res.writeHead(ok ? 200 : 500);
+      res.end(JSON.stringify({ success: ok, schedule: schedule.getSchedule() }));
       return;
     }
 
