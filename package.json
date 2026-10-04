@@ -1,17 +1,26 @@
 {
   "name": "douyin-spark-keeper",
-  "version": "1.0.0",
-  "description": "每天自动给抖音好友发消息续火花的 Windows 自动化工具",
-  "main": "send-spark.js",
+  "version": "2.2.0",
+  "description": "抖音自动续火花工具 - 图形化界面 + 定时任务",
+  "main": "app.js",
+  "bin": "app.js",
   "scripts": {
-    "start": "node send-spark.js",
-    "show": "node send-spark.js --show",
-    "login": "node send-spark.js --login"
+    "start": "node app.js",
+    "silent": "node app.js --silent",
+    "build": "pkg . --targets node18-win-x64 --output dist/douyin-spark-keeper.exe"
   },
-  "keywords": ["douyin", "spark", "automation", "playwright"],
+  "pkg": {
+    "assets": ["public/**/*"],
+    "targets": ["node18-win-x64"],
+    "outputPath": "dist"
+  },
+  "keywords": ["douyin", "spark", "automation"],
   "author": "",
-  "license": "MIT",
+  "license": "ISC",
   "dependencies": {
-    "playwright": "^1.63.0"
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }

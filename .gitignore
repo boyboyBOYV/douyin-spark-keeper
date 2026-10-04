@@ -1,16 +1,9 @@
-# 依赖
 node_modules/
-
-# 浏览器登录态（含个人账号信息，禁止上传）
 .browser-profile/
-
-# 运行日志
 logs/
 *.log
-
-# 好友列表缓存（含个人数据）
 friends.json
-
-# 系统文件
+today_sent.json
+dist/
 Thumbs.db
 .DS_Store
