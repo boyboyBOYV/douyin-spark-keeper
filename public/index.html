@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抖音续火花 - 控制台</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">🔥</div>
+      <div>
+        <h1>抖音续火花控制台</h1>
+        <p class="subtitle">选择好友 · 配置内容 · 自动续火花</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">就绪</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- 左侧：好友列表 -->
+    <section class="friends-panel">
+      <div class="panel-header">
+        <h2>好友列表</h2>
+        <span class="friend-count" id="friendCount">0 人</span>
+      </div>
+      <div class="friends-toolbar">
+        <input type="text" id="searchInput" class="search-input" placeholder="搜索好友昵称...">
+        <div class="toolbar-actions">
+          <button id="selectAllBtn" class="btn btn-sm">全选</button>
+          <button id="invertBtn" class="btn btn-sm">反选</button>
+          <button id="refreshBtn" class="btn btn-sm btn-primary">刷新好友</button>
+        </div>
+      </div>
+      <div class="friends-list" id="friendsList">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">👥</div>
+          <p>还没有好友数据</p>
+          <p class="empty-hint">点击右上角"刷新好友"从抖音读取</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右侧：配置 + 日志 -->
+    <aside class="config-panel">
+      <div class="config-section">
+        <h3>发送设置</h3>
+        <div class="form-group">
+          <label for="messageInput">发送内容</label>
+          <input type="text" id="messageInput" class="form-input" value="🔥" placeholder="输入要发送的内容">
+        </div>
+        <div class="form-group">
+          <label>已选好友</label>
+          <div class="selected-info" id="selectedInfo">0 / 0 人</div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>操作</h3>
+        <div class="action-buttons">
+          <button id="saveBtn" class="btn btn-primary btn-block">保存设置</button>
+          <button id="runBtn" class="btn btn-success btn-block">立即运行一次</button>
+          <button id="stopBtn" class="btn btn-danger btn-block" style="display:none;">停止运行</button>
+        </div>
+        <p class="hint">定时任务每天 22:30 自动按当前设置运行</p>
+      </div>
+
+      <div class="config-section log-section">
+        <h3>运行日志</h3>
+        <div class="log-box" id="logBox">
+          <div class="log-empty">暂无日志</div>
+        </div>
+        <button id="clearLogBtn" class="btn btn-sm btn-block">清空日志</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 运行中遮罩 -->
+  <div class="overlay" id="overlay" style="display:none;">
+    <div class="overlay-content">
+      <div class="spinner"></div>
+      <p id="overlayText">正在运行...</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
