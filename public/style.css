@@ -544,6 +544,102 @@ body {
   font-size: 16px;
 }
 
+/* Schedule */
+.schedule-empty {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.schedule-empty p {
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.schedule-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-create .form-input {
+  text-align: center;
+}
+
+.schedule-status {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.schedule-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-status-row:last-child {
+  border-bottom: none;
+}
+
+.schedule-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.schedule-value {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.schedule-state {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+
+.schedule-state-on {
+  background: rgba(37, 192, 106, 0.15);
+  color: var(--success);
+}
+
+.schedule-state-off {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+}
+
+.schedule-edit {
+  margin-bottom: 12px;
+}
+
+.schedule-edit label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.schedule-edit-row {
+  display: flex;
+  gap: 8px;
+}
+
+.schedule-edit-row .form-input {
+  flex: 1;
+}
+
+.schedule-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.schedule-actions .btn {
+  flex: 1;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .main {
