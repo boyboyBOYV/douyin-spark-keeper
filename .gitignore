@@ -8,6 +8,9 @@ node_modules/
 logs/
 *.log
 
+# 好友列表缓存（含个人数据）
+friends.json
+
 # 系统文件
 Thumbs.db
 .DS_Store

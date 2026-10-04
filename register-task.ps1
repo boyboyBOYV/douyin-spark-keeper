@@ -6,10 +6,10 @@ param(
 )
 
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$batPath = Join-Path $dir "run-hidden.bat"
+$batPath = Join-Path $dir "run-silent.bat"
 
 if (-not (Test-Path $batPath)) {
-    Write-Host "错误：找不到 run-hidden.bat，请确认本脚本在 douyin-spark 目录内" -ForegroundColor Red
+    Write-Host "错误：找不到 run-silent.bat，请确认本脚本在 douyin-spark 目录内" -ForegroundColor Red
     exit 1
 }
 

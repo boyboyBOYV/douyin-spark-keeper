@@ -50,13 +50,21 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: ========== 4. 扫码登录 ==========
+:: ========== 4. 打开图形界面（登录 + 选择好友） ==========
 echo.
-echo [4/5] 接下来打开抖音登录窗口
-echo       请用手机抖音扫码登录，登录成功后窗口会自动关闭
+echo [4/5] 即将打开图形化控制台
+echo       请在浏览器中：
+echo       1. 点击"刷新好友"，用手机抖音扫码登录
+echo       2. 勾选要续火花的好友
+echo       3. 设置发送内容，点击"保存设置"
+echo       4. 关闭浏览器和控制台窗口，回到这里继续
 echo.
 pause
-call login.bat
+start "" run-gui.bat
+echo.
+echo 控制台已打开，请完成上述操作后关闭控制台窗口
+echo 完成后按任意键继续...
+pause >nul
 
 :: ========== 5. 创建定时任务 ==========
 echo.
@@ -71,13 +79,13 @@ if %errorlevel% neq 0 (
 echo.
 echo ========================================
 echo   配置完成！
-echo   每天 22:30 自动给全部好友发 🔥
+echo   每天 22:30 自动给选中的好友续火花
 echo   关机错过后开机会自动补跑
 echo ========================================
 echo.
 echo 常用操作：
-echo   改发送内容 / 屏蔽某人 → 编辑 config.json
-echo   登录失效 → 双击 login.bat
-echo   想看发送过程 → 双击 run-show.bat
+echo   管理好友 / 改发送内容 → 双击 run-gui.bat
+echo   登录失效 → 在 GUI 中点击"刷新好友"重新扫码
+echo   立即运行一次 → 在 GUI 中点击"立即运行一次"
 echo.
 pause
