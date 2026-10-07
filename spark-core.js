@@ -76,16 +76,31 @@ class SparkCore {
   }
   async sendToFriends(friendKeys, message, blacklist = []) {
     const results = { success: [], failed: [], skipped: [] };
-    const blackSet = new Set(blacklist); const done = new Set();
+    const blackSet = new Set(blacklist);
+    const done = new Set();
+    let emptyCount = 0;
+    this.log('等待会话列表加载...');
+    let convs = [];
+    for (let i = 0; i < 30; i++) { convs = await this.readVisibleConversations(); if (convs.length > 0) break; await sleep(1000); }
+    if (convs.length === 0) { this.log('错误：会话列表加载超时（30秒），页面可能未登录或抖音结构已变化'); return results; }
+    this.log(`会话列表已加载，共 ${convs.length} 个会话`);
+    try { await this.page.evaluate(() => { const list = document.querySelector('.conversationConversationListwrapper'); if (list) list.scrollTop = 0; }); await sleep(1000); } catch (e) { /* 忽略 */ }
     for (let round = 0; round < 200; round++) {
-      const convs = await this.readVisibleConversations();
+      if (done.size >= friendKeys.length) { this.log('所有选中好友已处理完毕'); break; }
+      convs = await this.readVisibleConversations();
+      if (convs.length === 0) { emptyCount++; if (emptyCount >= 5) { this.log('错误：连续5次读取会话列表为空，停止任务'); break; } this.log(`会话列表为空（第${emptyCount}次），等待2秒重试...`); await sleep(2000); continue; }
+      emptyCount = 0;
       const target = convs.find((c) => { const key = c.avatar || c.name; return friendKeys.includes(key) && !done.has(key); });
       if (!target) {
-        this.log('当前可见会话中没有待发送的好友，尝试滚动...');
-        await this.scrollListDown();
+        this.log(`当前可见${convs.length}个会话，已处理${done.size}/${friendKeys.length}，继续滚动...`);
+        await this.scrollListDown(); await sleep(1000);
         const after = await this.readVisibleConversations();
         const hasPending = after.some((c) => { const key = c.avatar || c.name; return friendKeys.includes(key) && !done.has(key); });
-        if (!hasPending) { this.log('所有选中好友已处理完毕'); break; }
+        if (!hasPending && after.length > 0 && after.length <= convs.length) {
+          const missing = friendKeys.filter((k) => !done.has(k));
+          if (missing.length > 0) this.log(`警告：${missing.length}个好友在会话列表中找不到（可能已删除或头像URL变化），跳过`);
+          break;
+        }
         continue;
       }
       const key = target.avatar || target.name; done.add(key);
