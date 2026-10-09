@@ -1,6 +1,6 @@
 {
   "name": "douyin-spark-keeper",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "抖音自动续火花工具 - 图形化界面 + 定时任务",
   "main": "app.js",
   "bin": "app.js",
@@ -10,17 +10,26 @@
     "build": "pkg . --targets node18-win-x64 --output dist/douyin-spark-keeper.exe"
   },
   "pkg": {
-    "assets": ["public/**/*"],
-    "targets": ["node18-win-x64"],
+    "assets": [
+      "public/**/*"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
     "outputPath": "dist"
   },
-  "keywords": ["douyin", "spark", "automation"],
+  "keywords": [
+    "douyin",
+    "spark",
+    "automation"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "playwright": "^1.48.0"
   },
   "devDependencies": {
+    "@yao-pkg/pkg": "^6.23.0",
     "pkg": "^5.8.1"
   }
 }
