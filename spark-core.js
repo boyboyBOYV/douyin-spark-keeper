@@ -28,6 +28,7 @@ class SparkCore {
   async launch() {
     const launchArgs = ['--disable-blink-features=AutomationControlled'];
     if (!this.show) launchArgs.push('--window-position=-32000,-32000');
+
     this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
       headless: false,
       viewport: { width: 1440, height: 900 },
@@ -45,6 +46,7 @@ class SparkCore {
     }
   }
 
+  // 检查是否已登录
   async ensureLoggedIn(waitForLogin = false) {
     await this.page.goto(CHAT_URL, { waitUntil: 'domcontentloaded' });
     const maxRounds = waitForLogin ? 60 : 4;
@@ -59,22 +61,27 @@ class SparkCore {
     return false;
   }
 
+  // 读取当前可见的会话
   async readVisibleConversations() {
-    return this.page.evaluate(() =>
-      [...document.querySelectorAll('[data-e2e="conversation-item"]')].map((el) => {
+    return this.page.evaluate(() => {
+      return [...document.querySelectorAll('[data-e2e="conversation-item"]')].map((el) => {
         const nameEl = el.querySelector('.conversationConversationItemtitle');
         const img = el.querySelector('img');
         const streakEl = el.querySelector('.commonStreaknormalText');
+        const src = img ? img.src : '';
+        // 提取头像文件名哈希（tos-cn-xxx部分），不受CDN域名变化影响
+        const avatarHash = src ? src.split('/').pop().split('~')[0] : '';
         return {
           name: nameEl ? nameEl.innerText.trim() : '(未知)',
-          avatar: img ? img.src.split('~')[0] : '',
-          avatarFull: img ? img.src : '',
+          avatar: avatarHash,
+          avatarFull: src,
           streak: streakEl ? streakEl.innerText.trim() : '',
         };
-      })
-    );
+      });
+    });
   }
 
+  // 滚动列表加载更多
   async scrollListDown() {
     const box = await this.page.locator('.conversationConversationListwrapper').boundingBox();
     if (box) {
@@ -84,6 +91,7 @@ class SparkCore {
     await sleep(1500);
   }
 
+  // 读取全部好友（滚动加载到底）
   async fetchAllFriends() {
     this.log('正在加载好友列表...');
     const loggedIn = await this.ensureLoggedIn(true);
@@ -92,14 +100,19 @@ class SparkCore {
       return [];
     }
     await sleep(6000);
+
     const allFriends = new Map();
     let noChangeTimes = 0;
+
     for (let round = 0; round < 100; round++) {
       const convs = await this.readVisibleConversations();
       convs.forEach((c) => {
         const key = c.avatar || c.name;
-        if (!allFriends.has(key)) allFriends.set(key, { ...c, key, selected: true });
+        if (!allFriends.has(key)) {
+          allFriends.set(key, { ...c, key, selected: true });
+        }
       });
+
       await this.scrollListDown();
       const after = await this.readVisibleConversations();
       let changed = false;
@@ -107,6 +120,7 @@ class SparkCore {
         const key = c.avatar || c.name;
         if (!allFriends.has(key)) changed = true;
       });
+
       if (!changed) {
         noChangeTimes++;
         if (noChangeTimes >= 2) break;
@@ -114,12 +128,16 @@ class SparkCore {
         noChangeTimes = 0;
       }
     }
+
     const friends = [...allFriends.values()];
     this.log(`共读取到 ${friends.length} 位好友`);
+
+    // 保存缓存
     fs.writeFileSync(FRIENDS_CACHE, JSON.stringify(friends, null, 2), 'utf-8');
     return friends;
   }
 
+  // 从缓存读取好友
   loadCachedFriends() {
     try {
       if (fs.existsSync(FRIENDS_CACHE)) {
@@ -129,6 +147,7 @@ class SparkCore {
     return [];
   }
 
+  // 检查输入框是否为空
   async isInputEmpty() {
     return this.page.evaluate(() => {
       const ed = document.querySelector('[data-e2e="msg-input"] div[contenteditable="true"]');
@@ -136,15 +155,22 @@ class SparkCore {
     });
   }
 
+  // 给当前打开的会话发消息
   async sendToCurrent(message) {
     await this.page.waitForSelector('[data-e2e="msg-input"] div[contenteditable="true"]', { timeout: 15000 });
     await sleep(800);
-    await this.page.locator('[data-e2e="msg-input"] div[contenteditable="true"]').click();
+
+    const editor = this.page.locator('[data-e2e="msg-input"] div[contenteditable="true"]');
+    await editor.click();
     await sleep(300);
     await this.page.keyboard.insertText(message);
     await sleep(500);
-    if (!(await this.isInputEmpty())) throw new Error('输入框未成功写入内容');
+
+    const hasContent = !(await this.isInputEmpty());
+    if (!hasContent) throw new Error('输入框未成功写入内容');
+
     await this.page.click('.e2e-send-msg-btn');
+
     for (let i = 0; i < 16; i++) {
       await sleep(500);
       if (await this.isInputEmpty()) return true;
@@ -171,23 +197,38 @@ class SparkCore {
 
     // 构建 key -> name 映射（从好友缓存读取，用于名字匹配备用）
     const keyToName = {};
+    // 提取头像文件名哈希（兼容完整URL和纯哈希两种格式）
+    const getHash = (s) => {
+      if (!s) return '';
+      if (s.includes('/')) return s.split('/').pop().split('~')[0];
+      return s;
+    };
     try {
       if (fs.existsSync(FRIENDS_CACHE)) {
         const cached = JSON.parse(fs.readFileSync(FRIENDS_CACHE, 'utf-8'));
         cached.forEach((f) => {
-          if (f.key) keyToName[f.key] = f.name;
-          else if (f.avatar) keyToName[f.avatar] = f.name;
+          const k = f.key || f.avatar || '';
+          keyToName[k] = f.name;
         });
       }
     } catch (e) { /* 忽略 */ }
 
-    // 匹配函数：先用头像key精确匹配，匹配不到再用名字匹配备用
+    // 匹配函数：
+    // 1. 用头像文件名哈希匹配（不受CDN域名变化影响）
+    // 2. 兼容旧格式（完整URL）匹配
+    // 3. 名字匹配备用（换头像+改名时才会用到）
     // 返回匹配到的原始 friendKey，未匹配返回 null
     const matchFriend = (c) => {
-      const key = c.avatar || c.name;
-      // 1. 先精确匹配头像key
-      if (friendKeys.includes(key) && !done.has(key)) return key;
-      // 2. 名字匹配备用：抖音头像CDN域名会变化(p3/p11)，导致key不匹配，此时用名字匹配
+      const cHash = c.avatar || '';
+      for (const fk of friendKeys) {
+        if (done.has(fk)) continue;
+        // 1. 直接匹配（新格式 vs 新格式）
+        if (cHash && fk === cHash) return fk;
+        // 2. 旧格式（完整URL）与新格式（文件名哈希）互相比对
+        const fkHash = getHash(fk);
+        if (cHash && fkHash && fkHash === cHash) return fk;
+      }
+      // 3. 名字匹配备用
       if (c.name) {
         for (const fk of friendKeys) {
           if (done.has(fk)) continue;
