@@ -317,14 +317,18 @@ class SparkCore {
         continue;
       }
 
-      // 在当前列表中找到目标的索引（支持key和名字匹配）
+      // 在当前列表中找到目标的索引（直接比较avatar哈希和名字，不检查done集合）
       const convsNow = await this.readVisibleConversations();
       let idx = -1;
       for (let i = 0; i < convsNow.length; i++) {
-        const matched = matchFriend(convsNow[i]);
-        if (matched === targetKey) { idx = i; break; }
+        const c = convsNow[i];
+        if (c.avatar && getHash(targetKey) === c.avatar) { idx = i; break; }
+        if (c.name && target.name === c.name) { idx = i; break; }
       }
-      if (idx === -1) continue;
+      if (idx === -1) {
+        this.log(`找不到会话索引: ${target.name}，跳过`);
+        continue;
+      }
 
       try {
         await this.page.locator('[data-e2e="conversation-item"]').nth(idx).click();
