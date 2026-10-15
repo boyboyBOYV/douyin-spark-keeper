@@ -1,6 +1,6 @@
 {
   "name": "douyin-spark-keeper",
-  "version": "2.3.0",
+  "version": "2.3.2",
   "description": "抖音自动续火花工具 - 图形化界面 + 定时任务",
   "main": "app.js",
   "bin": "app.js",
@@ -26,7 +26,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "playwright": "^1.48.0"
+    "playwright": "1.48.0"
   },
   "devDependencies": {
     "@yao-pkg/pkg": "^6.23.0",

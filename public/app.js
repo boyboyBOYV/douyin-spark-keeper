@@ -107,6 +107,7 @@ function escapeHtml(str) { const div = document.createElement('div'); div.textCo
 
 async function loadSchedule() { try { const res = await fetch(`${API}/api/schedule`); renderSchedule(await res.json()); } catch (e) { console.error(e); } }
 function renderSchedule(data) {
+  if (data.error) addLog('error', `读取定时任务失败：${data.error}`);
   if (!data.exists) { scheduleEmpty.style.display = 'block'; scheduleInfo.style.display = 'none'; return; }
   scheduleEmpty.style.display = 'none'; scheduleInfo.style.display = 'block';
   scheduleTime.textContent = data.time || '-'; editScheduleTime.value = data.time || '22:30'; scheduleNext.textContent = data.nextRun || '-';

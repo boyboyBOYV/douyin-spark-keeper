@@ -55,7 +55,7 @@ async function readConversations(page) {
 async function isInputEmpty(page) {
   return page.evaluate(() => {
     const ed = document.querySelector('[data-e2e="msg-input"] div[contenteditable="true"]');
-    return ed ? ed.innerText.replace(/[​\s]/g, '') === '' : true;
+    return ed ? ed.innerText.replace(/[\u200b\s]/g, '') === '' : true;
   });
 }
 

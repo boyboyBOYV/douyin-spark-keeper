@@ -10,8 +10,9 @@ const LOG_DIR = path.join(__dirname, 'logs');
 fs.mkdirSync(LOG_DIR, { recursive: true });
 const logPath = path.join(LOG_DIR, new Date().toISOString().slice(0, 10) + '.log');
 
-function log(msg) {
-  const line = `[${new Date().toLocaleString('zh-CN', { hour12: false })}] ${msg}`;
+// raw = true 表示 msg 已自带时间戳（SparkCore 自己打过），避免重复打印两遍时间
+function log(msg, raw) {
+  const line = raw ? msg : `[${new Date().toLocaleString('zh-CN', { hour12: false })}] ${msg}`;
   console.log(line);
   try { fs.appendFileSync(logPath, line + '\n', 'utf-8'); } catch (e) { /* 忽略 */ }
 }
@@ -40,7 +41,7 @@ function log(msg) {
 
   const spark = new SparkCore({
     show: false,
-    onLog: (msg) => log(msg),
+    onLog: (msg) => log(msg, true),
   });
 
   try {

@@ -20,6 +20,23 @@
 
 ## 更新日志
 
+### v2.3.2 (2026-10-15)
+
+- 📌 **锁定浏览器版本**：`playwright` 依赖由 `^1.48.0` 改为精确 `1.48.0`。以前 `npm install` 可能装到新版 Playwright，它要求的 Chromium 版本与 exe 内置版本不一致，会表现为"找不到浏览器"
+- 📖 **修正安装说明**：安装浏览器必须用 `npx playwright@1.48.0 install chromium`。装最新版 Chromium 本 exe 无法使用
+- 🐛 **定时任务报错可诊断**：创建/查询定时任务失败时，现在会把 PowerShell 的真实错误显示出来；权限不足会明确提示需以管理员身份运行（旧版只会显示"创建失败"，看不出原因）
+- 🧹 **日志时间戳去重**：静默运行与定时任务日志不再把时间打印两遍
+- 🧹 **移除字面零宽字符**：`send-spark.js` 中不可见的零宽空格改为 `\u200b` 转义，避免文件编码变化后匹配失效
+- 🌐 **打开聊天页自动重试**：冷启动或网络抖动时首次打开抖音聊天页容易超时，旧版一次超时就让整个任务以英文异常终止。现在重试 3 次、单次超时放宽到 45 秒，仍然失败会给出一句中文提示
+- ⏰ **定时任务时间校验收紧**：`25:99` 这类格式对但不存在的时间，现在会被直接拦住并提示，不再丢给 PowerShell 抛一长串错误
+- 🐛 **修复源码版创建不了定时任务**：源码模式下传 `-Argument ''` 会被 PowerShell 拒绝，现已跳过该参数
+- ✅ 实测验证：9 位好友全部发送成功，0 失败
+
+### v2.3.1 (2026-10-11)
+
+- 🐛 **修复"成功0失败0"**：查找会话索引时误用了会跳过已处理好友的匹配函数，导致索引恒为 -1、发送被整体跳过，一条消息都发不出。现改为直接比较头像哈希与昵称来定位索引
+- ✅ 该版本修复后实测 9 位好友全部成功，0 失败
+
 ### v2.3.0 (2026-10-09)
 
 - 🐛 **修复重大 bug**：解决"成功0失败0"问题——会话列表加载超时、空列表误判完成
@@ -49,7 +66,7 @@
 
 1. 从 [Releases](https://github.com/boyboyBOYV/douyin-spark-keeper/releases) 下载最新版 `douyin-spark-keeper.exe`
 2. 放到任意文件夹（建议单独建一个文件夹，数据会保存在这里）
-3. 首次运行需要安装浏览器：在 exe 所在目录打开命令行，运行 `douyin-spark-keeper.exe`，如果提示缺少浏览器，先运行 `npx playwright install chromium`（需要 Node.js）
+3. 首次运行需要安装浏览器。本 exe 内置的是 Playwright **1.48.0**，只认对应版本的 Chromium，必须在 exe 所在目录打开命令行运行 `npx playwright@1.48.0 install chromium`（需要 Node.js）。装好后浏览器位于 `%LOCALAPPDATA%\ms-playwright\chromium-1140`
 4. 双击 exe 启动控制台，浏览器自动打开
 5. 扫码登录 → 勾选好友 → 创建定时任务
 
@@ -125,10 +142,14 @@
 
 **6. EXE 版提示找不到浏览器怎么办**
 
-EXE 版需要 Playwright 浏览器。在 exe 所在目录打开命令行，运行：
+本 exe 内置 Playwright **1.48.0**，只认 Chromium **1140** 这个版本。在 exe 所在目录打开命令行，运行：
+
 ```
-npx playwright install chromium
+npx playwright@1.48.0 install chromium
 ```
+
+⚠️ **不要**用 `npx playwright install chromium`：那会安装最新的 Chromium，本 exe 用不了，仍然会提示找不到浏览器。
+
 安装完成后再双击 exe 即可。
 
 ## 移动目录 / 换电脑
@@ -142,7 +163,7 @@ npx playwright install chromium
 
 ## 技术栈
 
-- Node.js + Playwright（浏览器自动化）
+- Node.js + Playwright 1.48.0（浏览器自动化，版本已锁定，勿升级）
 - 原生 HTTP 服务器（无框架依赖）
 - 原生 HTML/CSS/JS 前端（无构建）
 - Windows 任务计划程序（定时触发）

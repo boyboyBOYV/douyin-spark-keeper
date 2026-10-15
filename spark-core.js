@@ -48,7 +48,25 @@ class SparkCore {
 
   // 检查是否已登录
   async ensureLoggedIn(waitForLogin = false) {
-    await this.page.goto(CHAT_URL, { waitUntil: 'domcontentloaded' });
+    // 打开聊天页。冷启动或网络抖动时 20 秒超时很常见，
+    // 旧版这里没有重试，一次超时就会让整个任务以英文异常告终。
+    let navOk = false;
+    let lastErr = '';
+    for (let attempt = 1; attempt <= 3 && !navOk; attempt++) {
+      try {
+        await this.page.goto(CHAT_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        navOk = true;
+      } catch (e) {
+        lastErr = String(e.message || e).split('\n')[0];
+        this.log(`打开抖音聊天页失败（第${attempt}/3次）: ${lastErr}`);
+        if (attempt < 3) await sleep(3000);
+      }
+    }
+    if (!navOk) {
+      this.log('错误：无法打开抖音聊天页，请检查网络后重试');
+      return false;
+    }
+
     const maxRounds = waitForLogin ? 60 : 4;
     for (let i = 0; i < maxRounds; i++) {
       try {
