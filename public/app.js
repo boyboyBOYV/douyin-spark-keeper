@@ -1,7 +1,7 @@
 const API = '';
 let friends = [];
-let config = { message: '🔥', selectedFriends: [], blacklist: [] };
-let isRunning = false, logPollTimer = null;
+let config = { message: '🔥', selectedFriends: [], selectedNames: [], blacklist: [] };
+let isRunning = false, refreshBusy = false, logPollTimer = null;
 const $ = (id) => document.getElementById(id);
 const friendsList = $('friendsList'), emptyState = $('emptyState'), friendCount = $('friendCount'), selectedInfo = $('selectedInfo');
 const searchInput = $('searchInput'), messageInput = $('messageInput'), statusBadge = $('statusBadge'), statusText = $('statusText');
@@ -11,7 +11,16 @@ const newScheduleTime = $('newScheduleTime'), editScheduleTime = $('editSchedule
 
 async function init() { await loadConfig(); await loadFriends(); await loadSchedule(); bindEvents(); updateUI(); }
 async function loadConfig() { try { const res = await fetch(`${API}/api/config`); config = await res.json(); messageInput.value = config.message || '🔥'; } catch (e) { console.error(e); } }
-async function loadFriends() { try { const res = await fetch(`${API}/api/friends`); friends = await res.json(); friends.forEach((f) => { f.selected = config.selectedFriends.includes(f.key); }); } catch (e) { friends = []; } renderFriends(); }
+// 选中状态恢复：优先按 key；key 对不上时按保存下来的昵称兜底。
+// 抖音好友换头像会让头像哈希（key）变化，旧版此时会把该好友默默显示成未勾选，
+// 点「立即运行一次」时还会先存一次配置，把他从选中名单里永久抹掉。
+async function loadFriends() {
+  try { const res = await fetch(`${API}/api/friends`); friends = await res.json(); } catch (e) { friends = []; }
+  const savedKeys = config.selectedFriends || [];
+  const savedNames = config.selectedNames || [];
+  friends.forEach((f) => { f.selected = savedKeys.includes(f.key) || savedNames.includes(f.name); });
+  renderFriends();
+}
 
 function renderFriends(filter = '') {
   const filtered = filter ? friends.filter((f) => f.name.toLowerCase().includes(filter.toLowerCase())) : friends;
@@ -56,42 +65,97 @@ function bindEvents() {
   $('deleteScheduleBtn').addEventListener('click', deleteSchedule);
 }
 
+// 取出后端给的具体原因，别再把所有失败都显示成一句没头没尾的"失败"
+async function apiError(res) {
+  try { const d = await res.json(); return d.error || `HTTP ${res.status}`; } catch (e) { return `HTTP ${res.status}`; }
+}
+
+// 把 /api/status 里尚未显示过的日志追加到日志框
+async function pullLogs() {
+  const s = await (await fetch(`${API}/api/status`)).json();
+  if (s.logs && s.logs.length > 0) {
+    const le = logBox.querySelector('.log-empty'); if (le) le.remove();
+    s.logs.forEach((line) => { if (!logBox.dataset.lastLog || line.time > logBox.dataset.lastLog) { addLog(line.type || 'info', line.msg); logBox.dataset.lastLog = line.time; } });
+  }
+  return s;
+}
+
+// 等后端把异步任务真正跑完（刷新最长可能停在等扫码登录，所以给足 12 分钟）
+async function waitUntilIdle() {
+  const deadline = Date.now() + 12 * 60 * 1000;
+  for (;;) {
+    try { const s = await pullLogs(); if (!s.busy && !s.running) return; } catch (e) { /* 忽略，继续等 */ }
+    if (Date.now() > deadline) return;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
+// 刷新是后端异步执行的：POST 立刻返回，真正的活在后面跑十几秒。
+// 旧版在 POST 一返回就关掉遮罩，整个刷新过程界面零反馈，
+// 用户以为没反应就再点一次，于是撞上 409 并看到一句没头没尾的"刷新失败"。
 async function refreshFriends() {
-  if (isRunning) return;
+  if (isRunning || refreshBusy) return;
+  refreshBusy = true;
+  $('refreshBtn').disabled = true;
+  logBox.innerHTML = ''; logBox.dataset.lastLog = '';
   showOverlay('正在从抖音读取好友列表...'); setStatus('running', '读取中');
-  try { const res = await fetch(`${API}/api/friends/refresh`, { method: 'POST' }); if (res.ok) { await loadFriends(); addLog('info', `好友列表已刷新，共 ${friends.length} 人`); } else addLog('error', '刷新失败'); }
-  catch (e) { addLog('error', `刷新失败: ${e.message}`); }
-  finally { hideOverlay(); setStatus('ready', '就绪'); }
+  addLog('info', '开始刷新好友列表，请稍候（通常 10-30 秒；需要扫码登录时会更久）...');
+  try {
+    const res = await fetch(`${API}/api/friends/refresh`, { method: 'POST' });
+    if (!res.ok) {
+      addLog('error', `刷新失败：${await apiError(res)}`);
+      if (res.status === 409) {
+        addLog('info', '上一次操作还没结束（也可能正在等你扫码登录）。等它跑完即可。');
+        if (confirm('上一次操作似乎一直没结束。\n\n点「确定」会强制结束它，然后你可以重新点「刷新好友」。\n如果你此刻正在弹出的浏览器窗口里扫码登录，请点「取消」。')) {
+          await fetch(`${API}/api/reset`, { method: 'POST' });
+          addLog('info', '已强制清除运行状态，请再点一次「刷新好友」');
+        }
+      }
+      return;
+    }
+    await waitUntilIdle();
+    await loadFriends();
+    addLog('success', `好友列表已刷新，共 ${friends.length} 人`);
+  } catch (e) {
+    addLog('error', `刷新失败：${e.message}`);
+  } finally {
+    refreshBusy = false;
+    $('refreshBtn').disabled = false;
+    hideOverlay(); setStatus('ready', '就绪');
+  }
 }
 
 async function saveConfig() {
-  const selectedFriends = friends.filter((f) => f.selected).map((f) => f.key);
-  const newConfig = { message: messageInput.value || '🔥', selectedFriends, blacklist: config.blacklist || [] };
+  const picked = friends.filter((f) => f.selected);
+  const selectedFriends = picked.map((f) => f.key);
+  // 同时保存昵称：好友换头像导致 key 变化时，用它把选中状态和后端匹配都认回来
+  const newConfig = { message: messageInput.value || '🔥', selectedFriends, selectedNames: picked.map((f) => f.name), blacklist: config.blacklist || [] };
   try { const res = await fetch(`${API}/api/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newConfig) }); if (res.ok) { config = newConfig; addLog('success', `设置已保存：发送「${newConfig.message}」，选中 ${selectedFriends.length} 位好友`); } else addLog('error', '保存失败'); }
   catch (e) { addLog('error', `保存失败: ${e.message}`); }
 }
 
 async function runSpark() {
   if (isRunning) return;
+  if (refreshBusy) { alert('正在刷新好友列表，请等它跑完再运行'); return; }
   const selectedFriends = friends.filter((f) => f.selected);
   if (selectedFriends.length === 0) { alert('请先选择好友'); return; }
   await saveConfig();
   isRunning = true; runBtn.style.display = 'none'; stopBtn.style.display = 'block'; setStatus('running', '运行中');
-  showOverlay(`正在给 ${selectedFriends.length} 位好友发送消息...`); logBox.innerHTML = '';
+  showOverlay(`正在给 ${selectedFriends.length} 位好友发送消息...`); logBox.innerHTML = ''; logBox.dataset.lastLog = '';
   addLog('info', `开始运行：给 ${selectedFriends.length} 位好友发送「${messageInput.value}」`);
-  try { const res = await fetch(`${API}/api/run`, { method: 'POST' }); if (!res.ok) throw new Error('启动失败'); }
-  catch (e) { addLog('error', `启动失败: ${e.message}`); isRunning = false; runBtn.style.display = 'block'; stopBtn.style.display = 'none'; setStatus('ready', '就绪'); hideOverlay(); return; }
+  try { const res = await fetch(`${API}/api/run`, { method: 'POST' }); if (!res.ok) { const err = new Error(await apiError(res)); err.status = res.status; throw err; } }
+  catch (e) {
+    addLog('error', `启动失败：${e.message}`);
+    if (e.status === 409) addLog('info', '上一次操作还没结束。等它跑完即可；若长时间卡住，可在「刷新好友」处选择强制结束。');
+    isRunning = false; runBtn.style.display = 'block'; stopBtn.style.display = 'none'; setStatus('ready', '就绪'); hideOverlay(); return;
+  }
   logPollTimer = setInterval(pollStatus, 1500);
 }
 async function stopSpark() { try { await fetch(`${API}/api/stop`, { method: 'POST' }); addLog('info', '正在停止...'); } catch (e) { /* 忽略 */ } }
 
 async function pollStatus() {
   try {
-    const res = await fetch(`${API}/api/status`); const status = await res.json();
-    if (status.logs && status.logs.length > 0) {
-      const le = logBox.querySelector('.log-empty'); if (le) le.remove();
-      status.logs.forEach((line) => { if (!logBox.dataset.lastLog || line.time > logBox.dataset.lastLog) { addLog(line.type || 'info', line.msg); logBox.dataset.lastLog = line.time; } });
-    }
+    const status = await pullLogs();
     if (!status.running) {
       clearInterval(logPollTimer); isRunning = false; runBtn.style.display = 'block'; stopBtn.style.display = 'none'; hideOverlay(); setStatus('ready', '就绪');
       if (status.results) { addLog('success', `运行完成：成功 ${status.results.success.length}，失败 ${status.results.failed.length}，跳过 ${status.results.skipped.length}`); if (status.results.failed.length > 0) addLog('error', `失败名单: ${status.results.failed.join(', ')}`); }

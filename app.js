@@ -18,6 +18,22 @@ const state = { running:false, busy:false, results:null, logs:[], currentSpark:n
 function addLog(type,msg) { state.logs.push({time:Date.now(),type,msg}); if(state.logs.length>500) state.logs.shift(); console.log(`[${type}] ${msg}`); }
 function readConfig() { try { return JSON.parse(fs.readFileSync(CONFIG_FILE,'utf-8')); } catch(e) { return {message:'🔥',selectedFriends:[],blacklist:[]}; } }
 function writeConfig(c) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(c,null,2),'utf-8'); }
+// 好友换头像会让头像哈希(key)变化。保存的 key 匹配不上时，
+// 用同时保存的昵称找回当前 key；否则该好友会被静默跳过（既不发也不报错）。
+function resolveSelected(config) {
+  const keys = config.selectedFriends || [];
+  const names = config.selectedNames || [];
+  let all = [];
+  try { all = JSON.parse(fs.readFileSync(path.join(DATA_DIR,'friends.json'),'utf-8')); } catch (e) { return keys; }
+  if (!Array.isArray(all)) return keys;
+  return keys.map((k, i) => {
+    if (all.some((f) => f.key === k || f.avatar === k)) return k;
+    const nm = names[i];
+    if (!nm) return k;
+    const hit = all.find((f) => f.name === nm);
+    return hit ? (hit.key || hit.avatar || k) : k;
+  });
+}
 const MIME = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon'};
 function serveStatic(req,res) { let p = req.url==='/'?'/index.html':req.url; const fp = path.join(PUBLIC_DIR,p); if(!fp.startsWith(PUBLIC_DIR)){res.writeHead(403);res.end('Forbidden');return;} fs.readFile(fp,(err,data)=>{ if(err){res.writeHead(404);res.end('Not Found');return;} res.writeHead(200,{'Content-Type':MIME[path.extname(fp)]||'application/octet-stream'}); res.end(data); }); }
 function parseBody(req) { return new Promise((resolve,reject)=>{ let b=''; req.on('data',c=>b+=c); req.on('end',()=>{try{resolve(b?JSON.parse(b):{})}catch(e){reject(e)}}); req.on('error',reject); }); }
@@ -29,17 +45,21 @@ async function handleAPI(req,res) {
     if(pathname==='/api/friends/refresh'&&req.method==='POST') {
       if(state.busy){res.writeHead(409);res.end(JSON.stringify({error:'浏览器正忙'}));return;}
       state.busy=true; res.writeHead(200); res.end(JSON.stringify({status:'refreshing'}));
-      (async()=>{ const spark=new SparkCore({show:true,onLog:m=>addLog('info',m)}); state.currentSpark=spark; try{await spark.launch();await spark.fetchAllFriends();addLog('success','好友列表刷新完成');}catch(e){addLog('error',`刷新失败: ${e.message}`);}finally{await spark.close();state.currentSpark=null;state.busy=false;} })(); return;
+      (async()=>{ const spark=new SparkCore({show:true,onLog:m=>addLog('info',m)}); state.currentSpark=spark; try{await spark.launch();await spark.fetchAllFriends();addLog('success','好友列表刷新完成');}catch(e){addLog('error',`刷新失败: ${e.message}`);}finally{try{await spark.close();}catch(e){addLog('error',`关闭浏览器出错: ${e.message}`);}state.currentSpark=null;state.busy=false;} })(); return;
     }
     if(pathname==='/api/config'&&req.method==='GET'){res.writeHead(200);res.end(JSON.stringify(readConfig()));return;}
-    if(pathname==='/api/config'&&req.method==='POST'){const b=await parseBody(req);writeConfig({message:b.message||'🔥',selectedFriends:b.selectedFriends||[],blacklist:b.blacklist||[]});res.writeHead(200);res.end(JSON.stringify({status:'ok'}));return;}
+    if(pathname==='/api/config'&&req.method==='POST'){const b=await parseBody(req);writeConfig({message:b.message||'🔥',selectedFriends:b.selectedFriends||[],selectedNames:b.selectedNames||[],blacklist:b.blacklist||[]});res.writeHead(200);res.end(JSON.stringify({status:'ok'}));return;}
     if(pathname==='/api/run'&&req.method==='POST'){
       if(state.running||state.busy){res.writeHead(409);res.end(JSON.stringify({error:'正在运行中'}));return;}
       const config=readConfig(); if(!config.selectedFriends||config.selectedFriends.length===0){res.writeHead(400);res.end(JSON.stringify({error:'未选择好友'}));return;}
+      const resolved=resolveSelected(config);
       state.running=true;state.stopRequested=false;state.results=null;state.logs=[]; res.writeHead(200);res.end(JSON.stringify({status:'started'}));
-      (async()=>{ const spark=new SparkCore({show:false,onLog:m=>addLog('info',m)}); state.currentSpark=spark; try{ addLog('info',`启动续火花任务：发送「${config.message}」给 ${config.selectedFriends.length} 位好友`); await spark.launch(); if(!(await spark.ensureLoggedIn())){addLog('error','未检测到登录状态');state.results={success:[],failed:[],skipped:[]};}else{await new Promise(r=>setTimeout(r,6000));state.results=await spark.sendToFriends(config.selectedFriends,config.message,config.blacklist||[]); try{const all=spark.loadCachedFriends();const nt={};all.forEach(f=>nt[f.name]=f.key);writeTodaySent([...new Set([...readTodaySent(),...state.results.success.map(n=>nt[n]).filter(k=>k)])]);}catch(e){}} }catch(e){addLog('error',`任务异常: ${e.message}`);state.results=state.results||{success:[],failed:[],skipped:[]};}finally{await spark.close();state.currentSpark=null;state.running=false;addLog('success',`任务结束：成功 ${state.results.success.length}，失败 ${state.results.failed.length}`);} })(); return;
+      (async()=>{ const spark=new SparkCore({show:false,onLog:m=>addLog('info',m)}); state.currentSpark=spark; try{ addLog('info',`启动续火花任务：发送「${config.message}」给 ${config.selectedFriends.length} 位好友`); await spark.launch(); if(!(await spark.ensureLoggedIn())){addLog('error','未检测到登录状态');state.results={success:[],failed:[],skipped:[]};}else{await new Promise(r=>setTimeout(r,6000));state.results=await spark.sendToFriends(resolved,config.message,config.blacklist||[]); try{const all=spark.loadCachedFriends();const nt={};all.forEach(f=>nt[f.name]=f.key);writeTodaySent([...new Set([...readTodaySent(),...state.results.success.map(n=>nt[n]).filter(k=>k)])]);}catch(e){}} }catch(e){addLog('error',`任务异常: ${e.message}`);state.results=state.results||{success:[],failed:[],skipped:[]};}finally{try{await spark.close();}catch(e){addLog('error',`关闭浏览器出错: ${e.message}`);}state.currentSpark=null;state.running=false;addLog('success',`任务结束：成功 ${state.results.success.length}，失败 ${state.results.failed.length}`);} })(); return;
     }
     if(pathname==='/api/stop'&&req.method==='POST'){state.stopRequested=true;addLog('info','收到停止请求');res.writeHead(200);res.end(JSON.stringify({status:'stopping'}));return;}
+    // 逃生口：万一浏览器挂住导致 busy/running 一直为 true（表现为所有按钮都报"正忙"），
+    // 用它可以不重启程序就把状态清干净。
+    if(pathname==='/api/reset'&&req.method==='POST'){ if(state.currentSpark){try{await state.currentSpark.close();}catch(e){/* 忽略 */}} state.currentSpark=null;state.busy=false;state.running=false;state.stopRequested=false;addLog('info','已强制清除运行状态');res.writeHead(200);res.end(JSON.stringify({status:'ok'}));return;}
     if(pathname==='/api/status'&&req.method==='GET'){res.writeHead(200);res.end(JSON.stringify({running:state.running,busy:state.busy,results:state.results,logs:state.logs.slice(-50)}));return;}
     if(pathname==='/api/logs'&&req.method==='GET'){res.writeHead(200);res.end(JSON.stringify(state.logs));return;}
     if(pathname==='/api/schedule'&&req.method==='GET'){res.writeHead(200);res.end(JSON.stringify(schedule.getSchedule()));return;}
@@ -55,7 +75,7 @@ function openBrowser() { const u=`http://localhost:${PORT}`; exec(process.platfo
 if(process.argv.includes('--silent')) {
   const LOG_DIR=path.join(DATA_DIR,'logs'); fs.mkdirSync(LOG_DIR,{recursive:true}); const lp=path.join(LOG_DIR,new Date().toISOString().slice(0,10)+'.log');
   function sl(m,raw){const l=raw?m:`[${new Date().toLocaleString('zh-CN',{hour12:false})}] ${m}`;console.log(l);try{fs.appendFileSync(lp,l+'\n','utf-8');}catch(e){}}
-  (async()=>{ sl('=== 抖音续火花定时任务开始 ==='); let config; try{config=JSON.parse(fs.readFileSync(CONFIG_FILE,'utf-8'));}catch(e){sl('配置文件读取失败');process.exit(1);} const sf=config.selectedFriends||[]; if(sf.length===0){sl('未选择任何好友');process.exit(2);} sl(`发送内容: ${config.message||'🔥'} | 选中好友: ${sf.length} 人`); const spark=new SparkCore({show:false,onLog:m=>sl(m,true)}); try{await spark.launch();if(!(await spark.ensureLoggedIn())){sl('错误：未检测到登录状态');process.exitCode=2;return;}await new Promise(r=>setTimeout(r,6000));const results=await spark.sendToFriends(sf,config.message||'🔥',config.blacklist||[]);sl(`=== 任务结束：成功 ${results.success.length}，失败 ${results.failed.length}，跳过 ${results.skipped.length} ===`);try{const all=spark.loadCachedFriends();const nt={};all.forEach(f=>nt[f.name]=f.key);writeTodaySent([...new Set([...readTodaySent(),...results.success.map(n=>nt[n]).filter(k=>k)])]);}catch(e){}}catch(e){sl(`任务异常: ${e.message}`);process.exitCode=1;}finally{await spark.close();} })();
+  (async()=>{ sl('=== 抖音续火花定时任务开始 ==='); let config; try{config=JSON.parse(fs.readFileSync(CONFIG_FILE,'utf-8'));}catch(e){sl('配置文件读取失败');process.exit(1);} const sf=resolveSelected(config); if(sf.length===0){sl('未选择任何好友');process.exit(2);} sl(`发送内容: ${config.message||'🔥'} | 选中好友: ${sf.length} 人`); const spark=new SparkCore({show:false,onLog:m=>sl(m,true)}); try{await spark.launch();if(!(await spark.ensureLoggedIn())){sl('错误：未检测到登录状态');process.exitCode=2;return;}await new Promise(r=>setTimeout(r,6000));const results=await spark.sendToFriends(sf,config.message||'🔥',config.blacklist||[]);sl(`=== 任务结束：成功 ${results.success.length}，失败 ${results.failed.length}，跳过 ${results.skipped.length} ===`);try{const all=spark.loadCachedFriends();const nt={};all.forEach(f=>nt[f.name]=f.key);writeTodaySent([...new Set([...readTodaySent(),...results.success.map(n=>nt[n]).filter(k=>k)])]);}catch(e){}}catch(e){sl(`任务异常: ${e.message}`);process.exitCode=1;}finally{await spark.close();} })();
 } else {
   server.listen(PORT,()=>{ console.log('========================================'); console.log('  抖音续火花控制台已启动'); console.log(`  地址: http://localhost:${PORT}`); console.log('  浏览器将自动打开'); console.log('========================================'); setTimeout(openBrowser,1000); });
   process.on('SIGINT',async()=>{console.log('\n正在关闭...');if(state.currentSpark)await state.currentSpark.close();server.close();process.exit(0);});
